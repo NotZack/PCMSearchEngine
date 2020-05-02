@@ -12,7 +12,7 @@ public class Main {
     private void startApp() {
         UISocket interfaceSocket = new UISocket();
         interfaceSocket.openSocket();
-        interfaceSocket.openCommunication(new FileIndex());
+        interfaceSocket.openCommunication(new FileIndex("D:\\MasterIndex\\PlasmaCamFiles"));
     }
 
     /** Entry point into the application. Starts the application.
