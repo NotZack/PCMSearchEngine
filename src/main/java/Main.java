@@ -1,6 +1,8 @@
 import Indexing.FileIndex;
 import UIConnection.UISocket;
 
+import java.util.Scanner;
+
 /**
  * The entry point for starting the application.
  */
@@ -12,7 +14,7 @@ public class Main {
     private void startApp() {
         UISocket interfaceSocket = new UISocket();
         interfaceSocket.openSocket();
-        interfaceSocket.openCommunication(new FileIndex("D:\\MasterIndex\\PlasmaCamFiles"));
+        interfaceSocket.openCommunication(new FileIndex("D:/MasterIndex/PlasmaCamFiles"));
     }
 
     /** Entry point into the application. Starts the application.

@@ -9,15 +9,23 @@ import org.apache.lucene.index.DirectoryReader;
 import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriterConfig;
+import org.apache.lucene.queryparser.classic.ParseException;
+import org.apache.lucene.queryparser.classic.QueryParser;
 import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.ScoreDoc;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
+import org.jetbrains.annotations.NotNull;
 
+import javax.xml.xpath.XPath;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.List;
 import java.util.stream.Stream;
 
 public class FileIndex {
@@ -27,13 +35,13 @@ public class FileIndex {
 
     public FileIndex(String path) {
         baseDirectory = Paths.get(path);
-        tryCreateIndex();
+        createIndex();
     }
 
     /**
      * Creates a lucene index using the constant file name at the constant file path.
      */
-    private void tryCreateIndex() {
+    private void createIndex() {
         try {
             Directory dir = FSDirectory.open(baseDirectory);
 
@@ -74,7 +82,6 @@ public class FileIndex {
     }
 
     private Document pcmToDocument(Path filePath) {
-        System.out.println(filePath);
         Document doc = new Document();
 
         for (int i = baseDirectory.getNameCount(); i < filePath.getNameCount(); i++) {
@@ -85,5 +92,94 @@ public class FileIndex {
                 doc.add(new TextField("name", pathElement, Field.Store.YES));
         }
         return doc;
+    }
+
+    /**
+     * Searches the lucene index for the given phrase then returns the results as a string.
+     * @param clientQuery The inexact initial query text
+     * @param folderName The name of the folder to search in. Null if not searching for a folder.
+     * @return The result of the parsed query
+     */
+    public String parseInexactQuery(@NotNull String clientQuery, String folderName) {
+
+        StringBuilder topResults = new StringBuilder();
+        ArrayList<Integer> hitDocIndices = new ArrayList<>();
+        ArrayList<String> filteredHits = new ArrayList<>();
+
+        // Builds an exact query accounting for multi-word queries and leading/trailing whitespace
+        try {
+            if (clientQuery.endsWith(" "))
+                clientQuery = clientQuery.substring(0, clientQuery.length() - 1);
+            if (clientQuery.contains(" "))
+                clientQuery = clientQuery.replaceAll(" ", "* AND ");
+
+            Query query = null;
+            if (folderName != null && !folderName.equals("")) {
+                query = new QueryParser("name", new StandardAnalyzer()).parse(
+                        "folder:" + folderName + " AND name:" + clientQuery + "*");
+            }
+            else {
+                query = new QueryParser("name", new StandardAnalyzer()).parse(clientQuery + "*");
+            }
+            System.out.println("Query: " + query.toString());
+            ScoreDoc[] rawResults = searcher.search(query, 1000).scoreDocs;
+            for (ScoreDoc rawDoc : rawResults) {
+                hitDocIndices.add(rawDoc.doc);
+            }
+
+            for (Integer rawDoc : hitDocIndices) {
+                filteredHits.add(searcher.doc(rawDoc).getField("name").stringValue());
+            }
+
+            //Combines results into a string
+            if (filteredHits.size() > 0) {
+                for (String buildingRoom : filteredHits) {
+                    topResults.append(buildingRoom).append(",");
+                }
+            }
+            System.out.println("Found " + filteredHits.size() + " unique hits.");
+        }
+        catch (IOException | ParseException e) {
+            System.out.println(e);
+        }
+        return topResults.toString().equals("") ? "No results found" : topResults.toString();
+    }
+
+    /**
+     * Returns the file information of the file whose exact name is given. Returns first found file
+     * if files with the same exactName exist.
+     * @param exactName The exact name of the file to find
+     * @return The single exact file found
+     */
+    public String parseExactQuery(String exactName) {
+        ArrayList<Integer> hitDocIndices = new ArrayList<>();
+        ArrayList<List<String>> unfilteredResults = new ArrayList<>();
+
+        //Queries the lucene index for the exact file
+        exactName = exactName.replaceAll(" ", "* AND ");
+        try {
+            Query query = new QueryParser("name", new StandardAnalyzer()).parse(exactName + "*");
+            System.out.println("Query: " + query.toString());
+            ScoreDoc[] rawResults = searcher.search(query, 1000).scoreDocs;
+            for (ScoreDoc rawDoc : rawResults) {
+                hitDocIndices.add(rawDoc.doc);
+            }
+            StringBuilder filePath = new StringBuilder();
+            for (Integer rawDoc : hitDocIndices) {
+                searcher.doc(rawDoc).getFields().forEach((field) ->
+                        filePath.append(field.stringValue().trim()).append("/"));
+            }
+
+            return filePath.toString();
+
+        } catch (ParseException | IOException e) {
+            e.printStackTrace();
+        }
+
+        return null;
+    }
+
+    public Path getBaseDirectory() {
+        return baseDirectory;
     }
 }
