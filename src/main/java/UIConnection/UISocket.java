@@ -7,7 +7,6 @@ import java.awt.*;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.Scanner;
 
 public class UISocket {
 
@@ -58,14 +57,47 @@ public class UISocket {
             String clientQuery;
             while ((clientQuery = in.readLine()) != null) {
                 //Checks for an exact query request
+                System.out.println(clientQuery);
                 if (clientQuery.startsWith("Exact_Query:")) {
-                    out.println(fileIndex.parseExactQuery(clientQuery.substring(clientQuery.indexOf(":") + 1)));
+                    String exactPath = fileIndex.parseExactQuery(clientQuery.substring(clientQuery.indexOf(":") + 1));
+                    System.out.println(exactPath);
+                    out.println(exactPath);
+                    File file = new File(fileIndex.getBaseDirectory() + "/" + exactPath);
+
+
+                    Desktop desktop = Desktop.getDesktop();
+                    if(file.exists()) {
+                        try {
+                            desktop.open(file);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                }
+                else if (clientQuery.equals("Base_path_directory_request")) {
+                    out.println(fileIndex.getBaseDirectory());
                 }
                 //Executes an inexact query request
                 else {
                     clientQuery = clientQuery.replaceAll(" +", " ");
                     if (clientQuery.length() > 0 && !clientQuery.equals(" ")) {
-                        out.println(fileIndex.parseInexactQuery(clientQuery, null));
+                        if (clientQuery.contains("Folder_names: [")) {
+                            // Split on the cleaned trailing string array from the client query
+                            String[] folderNames = clientQuery.substring(clientQuery.indexOf("Folder_names: [") + 15).
+                                    replaceAll("'", "").replaceAll(", ", ",").split(",");
+
+                            // Remove the last character from the last string, its a ]
+                            folderNames[folderNames.length - 1] = folderNames[folderNames.length - 1].substring(0, folderNames[folderNames.length - 1].length() - 1);
+                            out.println(
+                                fileIndex.parseInexactQuery(
+                                    clientQuery.substring(0, clientQuery.indexOf("Folder_names: [")), folderNames
+                                )
+                            );
+                        }
+                        else {
+                            out.println(fileIndex.parseInexactQuery(clientQuery, (String[]) null));
+                        }
                     }
                     else {
                         out.println("Invalid query");
@@ -76,21 +108,6 @@ public class UISocket {
         catch (IOException e) {
             System.out.println(e + " and/or client disconnected");
             openSocket();
-        }
-
-        Scanner scnr = new Scanner(System.in);
-        System.out.println(fileIndex.parseInexactQuery(scnr.nextLine(), ""));
-        File file = new File(
-            fileIndex.getBaseDirectory() + "/" + fileIndex.parseExactQuery("bird feeder plans")
-        );
-
-        Desktop desktop = Desktop.getDesktop();
-        if(file.exists()) {
-            try {
-                desktop.open(file);
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
         }
     }
 }

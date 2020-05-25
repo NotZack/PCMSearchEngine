@@ -18,14 +18,11 @@ import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.FSDirectory;
 import org.jetbrains.annotations.NotNull;
 
-import javax.xml.xpath.XPath;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
-import java.util.List;
 import java.util.stream.Stream;
 
 public class FileIndex {
@@ -97,10 +94,10 @@ public class FileIndex {
     /**
      * Searches the lucene index for the given phrase then returns the results as a string.
      * @param clientQuery The inexact initial query text
-     * @param folderName The name of the folder to search in. Null if not searching for a folder.
+     * @param folderNames The names of the folders to search in. Null if not searching for a folder.
      * @return The result of the parsed query
      */
-    public String parseInexactQuery(@NotNull String clientQuery, String folderName) {
+    public String parseInexactQuery(@NotNull String clientQuery, String ... folderNames) {
 
         StringBuilder topResults = new StringBuilder();
         ArrayList<Integer> hitDocIndices = new ArrayList<>();
@@ -108,21 +105,25 @@ public class FileIndex {
 
         // Builds an exact query accounting for multi-word queries and leading/trailing whitespace
         try {
-            if (clientQuery.endsWith(" "))
-                clientQuery = clientQuery.substring(0, clientQuery.length() - 1);
+            clientQuery = clientQuery.trim();
             if (clientQuery.contains(" "))
                 clientQuery = clientQuery.replaceAll(" ", "* AND ");
 
             Query query = null;
-            if (folderName != null && !folderName.equals("")) {
-                query = new QueryParser("name", new StandardAnalyzer()).parse(
-                        "folder:" + folderName + " AND name:" + clientQuery + "*");
+            if (folderNames != null) {
+                StringBuilder folderQuery = new StringBuilder();
+                for (String folder : folderNames) {
+                    System.out.println(folder);
+                    folderQuery.append("folder:").append(folder).append(" OR ");
+                }
+                query = new QueryParser("folder", new StandardAnalyzer()).parse(
+                        folderQuery.toString() + "name:" + clientQuery + "*");
             }
             else {
                 query = new QueryParser("name", new StandardAnalyzer()).parse(clientQuery + "*");
             }
             System.out.println("Query: " + query.toString());
-            ScoreDoc[] rawResults = searcher.search(query, 1000).scoreDocs;
+            ScoreDoc[] rawResults = searcher.search(query, 100).scoreDocs;
             for (ScoreDoc rawDoc : rawResults) {
                 hitDocIndices.add(rawDoc.doc);
             }
@@ -142,6 +143,8 @@ public class FileIndex {
         catch (IOException | ParseException e) {
             System.out.println(e);
         }
+
+
         return topResults.toString().equals("") ? "No results found" : topResults.toString();
     }
 
@@ -153,23 +156,24 @@ public class FileIndex {
      */
     public String parseExactQuery(String exactName) {
         ArrayList<Integer> hitDocIndices = new ArrayList<>();
-        ArrayList<List<String>> unfilteredResults = new ArrayList<>();
+        StringBuilder filePath = new StringBuilder();
 
         //Queries the lucene index for the exact file
-        exactName = exactName.replaceAll(" ", "* AND ");
         try {
             Query query = new QueryParser("name", new StandardAnalyzer()).parse(exactName + "*");
             System.out.println("Query: " + query.toString());
-            ScoreDoc[] rawResults = searcher.search(query, 1000).scoreDocs;
+            ScoreDoc[] rawResults = searcher.search(query, 100).scoreDocs;
             for (ScoreDoc rawDoc : rawResults) {
                 hitDocIndices.add(rawDoc.doc);
             }
-            StringBuilder filePath = new StringBuilder();
             for (Integer rawDoc : hitDocIndices) {
-                searcher.doc(rawDoc).getFields().forEach((field) ->
-                        filePath.append(field.stringValue().trim()).append("/"));
+                Document doc = searcher.doc(rawDoc);
+                if (doc.getField("name").stringValue().equals(exactName)) {
+                    doc.getFields().forEach((field) ->
+                            filePath.append(field.stringValue().trim()).append("/"));
+                }
             }
-
+            System.out.println((rawResults.length > 0) ? "Exact file found" : "Exact file not found");
             return filePath.toString();
 
         } catch (ParseException | IOException e) {
