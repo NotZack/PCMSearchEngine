@@ -112,10 +112,14 @@ public class FileIndex {
             Query query = null;
             if (folderNames != null) {
                 StringBuilder folderQuery = new StringBuilder();
+                folderQuery.append("(");
                 for (String folder : folderNames) {
                     System.out.println(folder);
                     folderQuery.append("folder:").append(folder).append(" OR ");
                 }
+
+                folderQuery.replace(folderQuery.length() - 4, folderQuery.length(), ") AND ");
+                System.out.println(folderQuery.toString());
                 query = new QueryParser("folder", new StandardAnalyzer()).parse(
                         folderQuery.toString() + "name:" + clientQuery + "*");
             }
@@ -128,6 +132,7 @@ public class FileIndex {
                 hitDocIndices.add(rawDoc.doc);
             }
 
+            System.out.println(hitDocIndices.size());
             for (Integer rawDoc : hitDocIndices) {
                 filteredHits.add(searcher.doc(rawDoc).getField("name").stringValue());
             }
